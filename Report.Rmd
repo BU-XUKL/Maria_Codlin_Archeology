@@ -1,0 +1,541 @@
+---
+title: "Ancient Animals' Role Analysis Final Report"
+author: "Keliang Xu, Shuting Li, Tao He"
+date: "3/21/2022"
+output:
+  pdf_document: default
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+library(ggplot2)
+library(openxlsx)
+library(reshape2)
+library(dplyr)
+library(tidyr)
+library(stargazer)
+library(stats)
+library(qqplotr)
+library(AICcmodavg)
+library(car)
+```
+
+# Abstract
+
+This study is an analysis of the role of animals in the ancient economy at Teotihuacan Mexico. The purpose of this report is to provide statistical analysis to this study with the main goal of analyzing whether there exist significant differences in animals' diets from different sites. We did some exploratory data analysis to see the distribution of the isotope levels and used two-way ANOVA Test to compare how sites effect the isotope levels. Finally, we concluded there is a statistically-significant difference (p-values < 0.001) in average isotope level among different species and there is no significant difference in diets between two places, except the protein composition.  
+
+
+# Introduction
+
+The isotopes we focus on are stable carbon and nitrogen isotopes, which can reflect the level of human-grown plants and protein in the diet respectively. Since isotopes can enter animals' bones by eating, by comparing the average levels of carbon and nitrogen isotopes from ancient animals' bones between two sites of ancient Mexico, we can get insight into whether animals from these two sites had similar diets.
+
+
+# Data Cleaning and Processing
+
+```{r, include=FALSE}
+#read data
+data<-read.xlsx("for_stats_peeps.xlsx")
+data<-data[,-2:-6]
+data<-data[,-4]
+removedata<-c("MC381","MC389","MC393","MC76")
+i<-1
+for(i in i:4) data<-subset(data,data$ID!=removedata[i])
+
+data2<-data[,2:8]
+data2<-data2[,-3]
+data2<-data2[,-5]
+aggdata<-melt(data2,id=(c("Taxa","Site")))
+```
+
+Firstly, to clean this big data set, and also keep the same as the client's data, we dropped 4 useless observations client mentioned, which IDs are MC381, MC389, MC393, MC76. 
+
+Secondly, to help focus on the main question, we removed all irrelevant variables, the final variables of interest are "Taxa", "Site", "d13C_VPDB", "ap_13C_VPDB" and "d15N_air". Then we combined "d13C_VPDB", "ap_13C_VPDB" and "d15N_air" into one variable which named "isotope level".
+
+
+## Data Description
+
+                                      Table1: Data Explanation
+| Variable                                  | Explanation                              | Description |
+| :---:                                     | :---:                                    |:---:              |
+| Taxa                                      | Animal Species                           | turkey, cottontails, deer, hare |
+| site                                      | Ancient Mexico Cities                    | BAOX, PATT | 
+| isotope level                             | Carbon and Nitrogen level                | d13C_VPDB, ap_13C_VPDB, d15N_air | 
+
+\newpage
+
+# EDA
+
+## Summary of Data:
+
+To double check our client's work, we calculated the statistics of data:
+
+```{r,echo=FALSE}
+summ <- aggdata %>%                              
+  group_by(Taxa,Site,variable) %>% 
+  na.omit(aggdata) %>%
+  summarize(min = round(min(value),2),
+            median = round(median(value),2),
+            mean = round(mean(value),2),
+            max = round(max(value),2),
+            sd = round(sd(value),2),
+            count=n())
+knitr::kable(summ, caption = "Summary of Data")
+```
+
+In this form, we can see the mean, median, maximum, minimum, and standard deviation values of isotopes for each kind of animal in each site. The result is exactly same with client's result.
+
+We can see almost all average isotope levels are similar between different sites, except Nitrogen values in cottontail.
+\newpage
+
+## Boxplot
+
+```{r fig.align='center', fig.height=5, fig.width = 9, fig.cap="Isotope Levels vs. Taxa", echo=FALSE,warning=FALSE}
+ggplot(data = aggdata, aes(x=Taxa,y=value, fill=Taxa)) + 
+  geom_boxplot()+
+  geom_jitter(shape=16, position=position_jitter(0.2))+
+  facet_wrap(~variable,nrow = 1)
+```
+
+In figure 1, we compared isotopes levels in 4 taxa. It showed the level of d15N_air is less diverse than the other 2 isotopes.
+
+
+```{r, echo=FALSE,warning=FALSE}
+data_deer<-aggdata[which(aggdata$Taxa=="Deer"),]
+data_Cottontail<-aggdata[which(aggdata$Taxa=="Cottontail"),]
+data_Hare<-aggdata[which(aggdata$Taxa=="Hare"),]
+data_Turkey<-aggdata[which(aggdata$Taxa=="Turkey"),]
+
+deer1<-ggplot(data = data_deer, aes(x=variable,y=value, fill=variable)) + 
+  geom_boxplot()+
+  #geom_jitter(shape=16, position=position_jitter(0.2))+
+  labs(title = 'Deer')+
+  facet_wrap(~Site,nrow = 1)
+
+deer2<-ggplot(data = data_deer, aes(x=Site,y=value, fill=Site)) + 
+  geom_boxplot()+
+  #geom_jitter(shape=16, position=position_jitter(0.2))+
+  labs(title = 'Deer')+
+  facet_wrap(~variable,nrow = 1)
+
+
+
+cot1<-ggplot(data = data_Cottontail, aes(x=variable,y=value, fill=variable)) + 
+  geom_boxplot()+
+  #geom_jitter(shape=16, position=position_jitter(0.2))+
+  labs(title = 'Cottontail')+
+  facet_wrap(~Site,nrow = 1)
+
+cot2<-ggplot(data = data_Cottontail, aes(x=Site,y=value, fill=Site)) + 
+  geom_boxplot()+
+  #geom_jitter(shape=16, position=position_jitter(0.2))+
+  labs(title = 'Cottontail')+
+  facet_wrap(~variable,nrow = 1)
+
+
+hare1<-ggplot(data = data_Hare, aes(x=variable,y=value, fill=variable)) + 
+  geom_boxplot()+
+  #geom_jitter(shape=16, position=position_jitter(0.2))+
+  labs(title = 'Hare')+
+  facet_wrap(~Site,nrow = 1)
+
+hare2<-ggplot(data = data_Hare, aes(x=Site,y=value, fill=Site)) + 
+  geom_boxplot()+
+  #geom_jitter(shape=16, position=position_jitter(0.2))+
+  labs(title = 'Hare')+
+  facet_wrap(~variable,nrow = 1)
+
+turkey1<-ggplot(data = data_Turkey, aes(x=variable,y=value, fill=variable)) + 
+  geom_boxplot()+
+  #geom_jitter(shape=16, position=position_jitter(0.2))+
+  labs(title = 'Turkey')+
+  facet_wrap(~Site,nrow = 1)
+
+turkey2<-ggplot(data = data_Turkey, aes(x=Site,y=value, fill=Site)) + 
+  geom_boxplot()+
+  #geom_jitter(shape=16, position=position_jitter(0.2))+
+  labs(title = 'Turkey')+
+  facet_wrap(~variable,nrow = 1)
+
+```
+
+```{r fig.align='center', fig.height=10, fig.width = 9, fig.cap="Isotope Levels vs. Site", echo=FALSE, warning=FALSE}
+
+#gridExtra::grid.arrange(deer1,cot1,nrow=2,ncol=1)
+#gridExtra::grid.arrange(hare1,turkey1,nrow=2,ncol=1)
+
+gridExtra::grid.arrange(deer2,cot2,hare2,turkey2, nrow=4,ncol=1)
+```
+
+
+Then we compared isotopes in two sites for each kind of animal. Figure 2 and figure 3 showed that the median level of d13C_VPDB and d15N_air in BAOX is a little higher than Tlajinga of cottontail. Similarly, the median level of d13C_VPDB and d15N_air of hare also show differences in the boxplot.
+
+\newpage
+
+# Testing
+
+Then, we plan to try some statistical tests to compare the levels of the isotope in the two sites more precisely. We use two-way ANOVA tests to figure out how three isotope levels averages vary according to the level of species and location variables.
+
+Firstly, we checked the normality.
+
+## Checking Normality
+
+```{r,echo=FALSE,warning=FALSE, include=FALSE}
+# check the d13C_VPDB
+aggdata1 <- filter(aggdata, variable== "d13C_VPDB" & Site == "BAOX")
+ggplot1 <- ggplot(aggdata1, aes(value, colour = Taxa,fill=Taxa)) + geom_density(alpha = 0.3) +
+  scale_fill_brewer(palette="Dark2") +
+  scale_color_brewer(palette="Dark2") +
+  labs(x = "d13C_VPDB", y = "density", title = '"d13C_VPDB level" distribution in BOAX')
+
+
+aggdata2 <- filter(aggdata, variable== "d13C_VPDB" & Site == "Tlajinga")
+ggplot2 <- ggplot(aggdata2, aes(value, colour = Taxa,fill=Taxa)) + geom_density(alpha = 0.3) +
+  scale_fill_brewer(palette="Dark2") +
+  scale_color_brewer(palette="Dark2") +
+  labs(x = "d13C_VPDB", y = "density", title = '"d13C_VPDB level" distribution in Tlajinga')
+
+# check the d15N_air
+aggdata3 <- filter(aggdata, variable== "d15N_air" & Site == "BAOX")
+ggplot3 <- ggplot(aggdata3, aes(value, colour = Taxa,fill=Taxa)) + geom_density(alpha = 0.3) +
+  scale_fill_brewer(palette="Dark2") +
+  scale_color_brewer(palette="Dark2") +
+  labs(x = "d15N_air", y = "density", title = '"d15N_air level" distribution in BOAX')
+
+
+aggdata4 <- filter(aggdata, variable== "d15N_air" & Site == "Tlajinga")
+ggplot4 <- ggplot(aggdata4, aes(value, colour = Taxa,fill=Taxa)) + geom_density(alpha = 0.3) +
+  scale_fill_brewer(palette="Dark2") +
+  scale_color_brewer(palette="Dark2") +
+  labs(x = "d15N_air", y = "density", title = '"d15N_air level" distribution in Tlajinga')
+
+# check the ap_13C_VPDB
+aggdata5 <- filter(aggdata, variable== "ap_13C_VPDB" & Site == "BAOX")
+ggplot5 <- ggplot(aggdata5, aes(value, colour = Taxa,fill=Taxa)) + geom_density(alpha = 0.3) +
+  scale_fill_brewer(palette="Dark2") +
+  scale_color_brewer(palette="Dark2") +
+  labs(x = "ap_13C_VPDB", y = "density", title = '"ap_13C_VPDB level" distribution in BOAX')
+
+
+aggdata6 <- filter(aggdata, variable== "ap_13C_VPDB" & Site == "Tlajinga")
+ggplot6 <- ggplot(aggdata6, aes(value, colour = Taxa,fill=Taxa)) + geom_density(alpha = 0.3) +
+  scale_fill_brewer(palette="Dark2") +
+  scale_color_brewer(palette="Dark2") +
+  labs(x = "ap_13C_VPDB", y = "density", title = '"ap_13C_VPDB level" distribution in Tlajinga')
+```
+
+```{r fig.height=6, fig.width= 9, fig.cap="Distribution of Three Isotope Levels For Each Species In Each Place", warning=FALSE,echo=FALSE}
+gridExtra::grid.arrange(ggplot1, ggplot2, ggplot3, ggplot4, ggplot5, ggplot6)
+```
+
+It is difficult to observe from the figures whether they follow the normal distribution. But comparing the distributions of the two places, most of them follow different distributions. It is reasonable since our sample size is too small.
+
+Therefore, we also plot the Q-Q plots for checking the normality. The purpose of the quantile-quantile (Q-Q) plot is to show if two data sets come from the same distribution. Plotting the first data set's quantiles along the x-axis and plotting the second data set's quantiles along the y-axis is how the plot is constructed.
+
+```{r,include=FALSE}
+# data set
+test.turkey.d13C <- filter(aggdata, Taxa == "Turkey" & variable== "d13C_VPDB")
+test.Cottontail.d13C <- filter(aggdata, Taxa == "Cottontail" & variable== "d13C_VPDB")
+test.Deer.d13C <- filter(aggdata, Taxa == "Deer" & variable== "d13C_VPDB")
+test.Hare.d13C <- filter(aggdata, Taxa == "Hare" & variable== "d13C_VPDB")
+
+test.turkey.d15N <- filter(aggdata, Taxa == "Turkey" & variable== "d15N_air")
+test.Cottontail.d15N <- filter(aggdata, Taxa == "Cottontail" & variable== "d15N_air")
+test.Deer.d15N <- filter(aggdata, Taxa == "Deer" & variable== "d15N_air")
+test.Hare.d15N <- filter(aggdata, Taxa == "Hare" & variable== "d15N_air")
+
+test.turkey.ap13C <- filter(aggdata, Taxa == "Turkey" & variable== "ap_13C_VPDB")
+test.Cottontail.ap13C <- filter(aggdata, Taxa == "Cottontail" & variable== "ap_13C_VPDB")
+test.Deer.ap13C <- filter(aggdata, Taxa == "Deer" & variable== "ap_13C_VPDB")
+test.Hare.ap13C <- filter(aggdata, Taxa == "Hare" & variable== "ap_13C_VPDB")
+```
+
+```{r,echo=FALSE, include=FALSE}
+# "d13C_VPDB" level in turkey groups
+plot1 <- ggplot(test.turkey.d13C, aes(sample = value)) + 
+  stat_qq_band() +
+  stat_qq_point() + 
+  stat_qq_line(col = "steelblue", lwd = 0.5) + 
+  theme_bw() +
+  xlab("Theortical Quantiles") +
+  ylab("Sample Quantiles") +
+  ggtitle('Normal Q-Q plot of "d13C_VPDB" level in turkey groups')
+
+# "d13C_VPDB" level in Cottontail groups
+plot2 <- ggplot(test.Cottontail.d13C, aes(sample = value)) + 
+  stat_qq_band() +
+  stat_qq_point() + 
+  stat_qq_line(col = "steelblue", lwd = 0.5) + 
+  theme_bw() +
+  xlab("Theortical Quantiles") +
+  ylab("Sample Quantiles") +
+  ggtitle('Normal Q-Q plot of "d13C_VPDB" level in cottontail groups')
+
+# "d13C_VPDB" level in Deer groups
+plot3 <- ggplot(test.Deer.d13C, aes(sample = value)) + 
+  stat_qq_band() +
+  stat_qq_point() + 
+  stat_qq_line(col = "steelblue", lwd = 0.5) + 
+  theme_bw() +
+  xlab("Theortical Quantiles") +
+  ylab("Sample Quantiles") +
+  ggtitle('Normal Q-Q plot of "d13C_VPDB" level in deer groups')
+
+# "d13C_VPDB" level in Hare groups
+plot4 <- ggplot(test.Hare.d13C, aes(sample = value)) + 
+  stat_qq_band() +
+  stat_qq_point() + 
+  stat_qq_line(col = "steelblue", lwd = 0.5) + 
+  theme_bw() +
+  xlab("Theortical Quantiles") +
+  ylab("Sample Quantiles") +
+  ggtitle('Normal Q-Q plot of "d13C_VPDB" level in hare groups')
+
+# "d15N_air" level in turkey groups
+plot5 <- ggplot(test.turkey.d15N, aes(sample = value)) + 
+  stat_qq_band() +
+  stat_qq_point() + 
+  stat_qq_line(col = "steelblue", lwd = 0.5) + 
+  theme_bw() +
+  xlab("Theortical Quantiles") +
+  ylab("Sample Quantiles") +
+  ggtitle('Normal Q-Q plot of "d15N_air" level in turkey groups')
+
+# "d15N_air" level in Cottontail groups
+plot6 <- ggplot(test.Cottontail.d15N, aes(sample = value)) + 
+  stat_qq_band() +
+  stat_qq_point() +
+  stat_qq_line(col = "steelblue", lwd = 0.5) + 
+  theme_bw() +
+  xlab("Theortical Quantiles") +
+  ylab("Sample Quantiles") +
+  ggtitle('Normal Q-Q plot of "d15N_air" level in Cottontail groups')
+
+# "d15N_air" level in Deer groups
+plot7 <- ggplot(test.Deer.d15N, aes(sample = value)) + 
+  stat_qq_band() +
+  stat_qq_point() + 
+  stat_qq_line(col = "steelblue", lwd = 0.5) + 
+  theme_bw() +
+  xlab("Theortical Quantiles") +
+  ylab("Sample Quantiles") +
+  ggtitle('Normal Q-Q plot of "d15N_air" level in Deer groups')
+
+# "d15N_air" level in Hare groups
+plot8 <- ggplot(test.Hare.d15N, aes(sample = value)) + 
+  stat_qq_band() +
+  stat_qq_point() + 
+  stat_qq_line(col = "steelblue", lwd = 0.5) + 
+  theme_bw() +
+  xlab("Theortical Quantiles") +
+  ylab("Sample Quantiles") +
+  ggtitle('Normal Q-Q plot of "d15N_air" level in Hare groups')
+
+# "ap_13C_VPDB" level in turkey groups
+plot9 <- ggplot(test.turkey.ap13C, aes(sample = value)) + 
+  stat_qq_band() +
+  stat_qq_point() + 
+  stat_qq_line(col = "steelblue", lwd = 0.5) + 
+  theme_bw() +
+  xlab("Theortical Quantiles") +
+  ylab("Sample Quantiles") +
+  ggtitle('Normal Q-Q plot of "ap_13C_VPDB" level in turkey groups')
+  
+# "ap_13C_VPDB" level in Cottontail groups
+plot10 <- ggplot(test.Cottontail.ap13C, aes(sample = value)) + 
+  stat_qq_band() +
+  stat_qq_point() + 
+  stat_qq_line(col = "steelblue", lwd = 0.5) + 
+  theme_bw() +
+  xlab("Theortical Quantiles") +
+  ylab("Sample Quantiles") +
+  ggtitle('Normal Q-Q plot of "ap_13C_VPDB" level in Cottontail groups')
+
+# "ap_13C_VPDB" level in Deer groups
+plot11 <- ggplot(test.Deer.ap13C, aes(sample = value)) + 
+  stat_qq_band() +
+  stat_qq_point() + 
+  stat_qq_line(col = "steelblue", lwd = 0.5) + 
+  theme_bw() +
+  xlab("Theortical Quantiles") +
+  ylab("Sample Quantiles") +
+  ggtitle('Normal Q-Q plot of "ap_13C_VPDB" level in Deer groups')
+
+# "ap_13C_VPDB" level in Hare groups
+plot12 <- ggplot(test.Hare.ap13C, aes(sample = value)) + 
+  stat_qq_band() +
+  stat_qq_point() + 
+  stat_qq_line(col = "steelblue", lwd = 0.5) + 
+  theme_bw() +
+  xlab("Theortical Quantiles") +
+  ylab("Sample Quantiles") +
+  ggtitle('Normal Q-Q plot of "ap_13C_VPDB" level in Hare groups')
+```
+
+```{r echo=FALSE, fig.height=19, fig.width= 17, fig.cap="Normal Q-Q Plots in Each Species Group"}
+gridExtra::grid.arrange(plot1, plot2, plot3, plot4, plot5, plot6, 
+                        plot7, plot8, plot9, plot10, plot11, plot12, 
+                        nrow = 4, ncol = 3)
+```
+
+\newpage
+
+From the normal Q-Q plots, except the "d15N_air" level in turkey groups, as almost all the points fall approximately along this reference line, we can assume normality to some extent.
+
+
+## Two-Way ANOVA Tests
+
+```{r,echo=FALSE, include=FALSE}
+# separate three isotope levels 
+data_dc<-aggdata[which(aggdata$variable=="d13C_VPDB"),]
+data_n<-aggdata[which(aggdata$variable=="d15N_air"),]
+data_apc<-aggdata[which(aggdata$variable=="ap_13C_VPDB"),]
+```
+
+```{r,echo=FALSE}
+res.aovdc<-aov(value ~ Taxa + Site, data = data_dc)
+res.aovn<-aov(value ~ Taxa + Site, data = data_n)
+res.aovapc<-aov(value ~ Taxa + Site, data = data_apc)
+
+print("'d13C_VPDB' Level ~ animal type + site")
+summary(res.aovdc)
+print("'d15N_air' Level ~ animal type + site")
+summary(res.aovn)
+print("'ap_13C_VPDB' Level ~ animal type + site")
+summary(res.aovapc)
+```
+
+From this output, we found a statistically-significant difference in average isotope level among different ***Taxa*** (p-values < 0.001). Different animals have different isotope levels.
+
+For the "d13C_VPDB" Level and "ap_13C_VPDB" Level, ***Site*** is not significant (p-values > 0.001), which means there is no significant difference between two places. However, for the "d15N_air" Level, ***Site*** factor effects the isotope significantly, means there are some differences in protein composition of animals' diets from BAOX and PATT. 
+
+To check the normality assumption, we also did Q-Q Plots with the residuals that client could refer to in the appendix.
+
+
+# Conclusion
+
+We checked all client's works, including the summary of data and box plots. Our results are consistent with hers. Then, after we did two-way ANOVA tests to statistically analyze the main problem we want to solve, we concluded there is a statistically-significant difference in average isotope level among different species and there is no significant difference in diets between two places, except the protein composition.
+
+
+# Citation
+
+Rebecca Bevans, “An Introduction to the Two-Way ANOVA.”, Scribbr, 7 Jan. 2021, https://www.scribbr.com/statistics/two-way-anova/. 
+
+“Two-Way ANOVA Test in R.” STHDA, http://www.sthda.com/english/wiki/two-way-anova-test-in-r#infos. 
+
+
+\newpage
+
+# Appendix
+
+## Test code 
+
+### Two-way ANOVA tests
+
+```{r}
+# model 1
+res.aovdc<-aov(value ~ Taxa + Site, data = data_dc)
+# model 2
+interaction.aovdc<-aov(value ~ Taxa * Site, data = data_dc)
+
+model.set<-list(res.aovdc, interaction.aovdc)
+model.names <- c("two.way", "interaction")
+print("'d13C_VPDB' Level ~ animal type + site")
+aictab(model.set, modnames = model.names)
+```
+
+```{r}
+# model 1
+res.aovn<-aov(value ~ Taxa + Site, data = data_n)
+# model 2
+interaction.aovn<-aov(value ~ Taxa * Site, data = data_n)
+
+model.set<-list(res.aovn, interaction.aovn)
+model.names <- c("two.way", "interaction")
+print("'d15N_air' Level ~ animal type + site")
+aictab(model.set, modnames = model.names)
+```
+\newpage
+
+```{r}
+# model 1
+res.aovapc<-aov(value ~ Taxa + Site, data = data_apc)
+# model 2
+interaction.aovapc<-aov(value ~ Taxa * Site, data = data_apc)
+
+model.set<-list(res.aovapc, interaction.aovapc)
+model.names <- c("two.way", "interaction")
+print("'ap_13C_VPDB' Level ~ animal type + site")
+aictab(model.set, modnames = model.names)
+```
+
+### Check the homogeneity of variance assumption
+
+```{r,echo=FALSE, fig.cap='"Residuals versus Fits plot of "d13C_VPDB" Level"'}
+plot(res.aovdc, 1)
+```
+
+
+```{r,echo=FALSE, fig.cap='"Residuals versus Fits plot of "d15N_air" Level"'}
+plot(res.aovapc, 1)
+```
+
+```{r,echo=FALSE, fig.cap='"Residuals versus Fits plot of "ap_13C_VPDB" Level"'}
+plot(res.aovn, 1)
+```
+
+```{r,echo=FALSE}
+leveneTest(value ~ Taxa*Site,data= data_dc)
+leveneTest(value ~ Taxa*Site,data= data_n)
+leveneTest(value ~ Taxa*Site,data= data_apc)
+# From the output above we can see that the p-value is not less than the 
+# significance level of 0.05. This means that there is no evidence to suggest 
+# that the variance across groups is statistically significantly different. 
+# Therefore, we can assume the homogeneity of variances in the different 
+# treatment groups.
+```
+
+```{r,echo=FALSE, fig.cap='"Residual plot of "d13C_VPDB" Level based on groups"'}
+datd13c <- data.frame(resi=resid(res.aovdc),fitt=fitted(res.aovdc),data_dc)
+ggplot(datd13c,aes(y=resi,x=fitt,color=Site,shape=Taxa))+
+  geom_point()+
+  geom_line()
+```
+
+```{r,echo=FALSE, fig.cap='"Residual plot of "d15N_air" Level based on groups"'}
+datd15n <- data.frame(resi=resid(res.aovn),fitt=fitted(res.aovn),data_n)
+ggplot(datd15n,aes(y=resi,x=fitt,color=Site,shape=Taxa))+
+  geom_point()+
+  geom_line()
+```
+
+```{r,echo=FALSE, fig.cap='"Residual plot of "ap_13C_VPDB" Level based on groups"'}
+datap13c <- data.frame(resi=resid(res.aovapc),fitt=fitted(res.aovapc),data_apc[!is.na(data_apc$value),])
+ggplot(datap13c,aes(y=resi,x=fitt,color=Site,shape=Taxa))+
+  geom_point()+
+  geom_line()
+```
+
+\newpage
+
+### Check the normality assumption
+
+```{r,echo=FALSE, fig.height=3.5, fig.width= 7, fig.cap= 'Normality plot of the residuals of "d13C_VPDB" Level'}
+# As all the points fall approximately along this reference line, 
+# we can assume normality.
+plot(res.aovdc, 2)
+```
+
+
+```{r,echo=FALSE, fig.height=3.5, fig.width= 7,fig.cap= 'Normality plot of the residuals of "d15N_air" Level'}
+plot(res.aovn, 2)
+```
+
+```{r,echo=FALSE, fig.height=3.5, fig.width= 7,fig.cap= 'Normality plot of the residuals of "ap_13C_VPDB" Level'}
+plot(res.aovapc, 2)
+```
+
+
+\newpage
+
+## Reference
+
+Somerville, A.D., Sugiyama, N., Manzanilla, L.R. et al. Leporid management and specialized food production at Teotihuacan: stable isotope data from cottontail and jackrabbit bone collagen. Archaeol Anthropol Sci 9, 83–97 (2017). https://doi.org/10.1007/s12520-016-0420-2
